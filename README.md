@@ -14,7 +14,7 @@ You are required to help the manager to predict the right group of the new custo
 
 ## Neural Network Model
 
-![image](https://github.com/Harishspice/nn-classification/assets/117935868/f6400e0b-e39f-4d8d-9570-e79a9510982f)
+![image](https://github.com/Yuvan291205/nn-classification/assets/138849170/84792821-faa1-4050-9bfb-6da7dab1784c)
 
 ## DESIGN STEPS
 
@@ -47,115 +47,175 @@ Once the model is done training, we validate and use the model to predict values
 
 ```python
 import pandas as pd
-data = pd.read_csv("customers.csv")
-data.head()
-```
-
-```python
-data_cleaned=data.drop(columns=["ID","Var_1"])
-data_col=list(data_cleaned.columns)
-print("The shape of the data before removing null values is\nRow:"+str(data_cleaned.shape[0])+"\nColumns:"+str(data_cleaned.shape[1]))
-```
-
-```python
-data_col_obj=list()
-for c in data_col:
-  if data_cleaned[c].dtype=='O':
-      data_col_obj.append(c)
-data_col_obj.remove("Segmentation")
-print("The Columns/Features that have Objects(dataType) before encoding are:\n")
-print(data_col_obj)
-
-from sklearn.preprocessing import OrdinalEncoder
-data_cleaned[data_col_obj]=OrdinalEncoder().fit_transform(data_cleaned[data_col_obj])
-from sklearn.preprocessing import MinMaxScaler
-data_cleaned[["Age"]]=MinMaxScaler().fit_transform(data_cleaned[["Age"]])
-data_cleaned.head()
-
-from sklearn.preprocessing import OneHotEncoder
-y=data_cleaned[["Segmentation"]].values
-y=OneHotEncoder().fit_transform(y).toarray()
-pd.DataFrame(y)
-```
-```python
-X=data_cleaned.iloc[:,:-1]
 from sklearn.model_selection import train_test_split
-X_train,X_test,y_train,y_test=train_test_split(X,y,test_size=0.3)
-
 from tensorflow.keras.models import Sequential
+from tensorflow.keras.models import load_model
+import pickle
 from tensorflow.keras.layers import Dense
-model=Sequential([
-    Dense(64,input_shape=X_train.iloc[0].shape,activation="relu"),
-    Dense(32,activation='tanh'),
-    Dense(16,activation='relu'),
-    Dense(8,activation='tanh'),
-    Dense(4,activation='softmax'),
+from tensorflow.keras.layers import Dropout
+from tensorflow.keras.layers import BatchNormalization
+import tensorflow as tf
+import seaborn as sns
+from tensorflow.keras.callbacks import EarlyStopping
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.preprocessing import OrdinalEncoder
+from sklearn.metrics import classification_report,confusion_matrix
+import numpy as np
+import matplotlib.pylab as plt
+
+customer_df = pd.read_csv('customers.csv')
+customer_df.columns
+
+customer_df.dtypes
+customer_df.shape
+
+customer_df.isnull().sum()
+customer_df_cleaned = customer_df.dropna(axis=0)
+customer_df_cleaned.isnull().sum()
+customer_df_cleaned.dtypes
+
+customer_df_cleaned['Gender'].unique()
+customer_df_cleaned['Ever_Married'].unique()
+customer_df_cleaned['Graduated'].unique()
+
+categories_list=[['Male', 'Female'],
+           ['No', 'Yes'],
+           ['No', 'Yes'],
+           ['Healthcare', 'Engineer', 'Lawyer', 'Artist', 'Doctor',
+            'Homemaker', 'Entertainment', 'Marketing', 'Executive'],
+           ['Low', 'Average', 'High']
+           ]
+enc = OrdinalEncoder(categories=categories_list)
+customers_1 = customer_df_cleaned.copy()
+
+customers_1[['Gender',
+             'Ever_Married',
+              'Graduated','Profession',
+              'Spending_Score']] = enc.fit_transform(customers_1[['Gender','Ever_Married','Graduated','Profession','Spending_Score']])
+
+le = LabelEncoder()
+customers_1['Segmentation'] = le.fit_transform(customers_1['Segmentation'])
+customers_1.dtypes
+
+customers_1 = customers_1.drop('ID',axis=1)
+customers_1 = customers_1.drop('Var_1',axis=1)
+customers_1.dtypes
+
+# Calculate the correlation matrix
+corr = customers_1.corr()
+
+# Plot the heatmap
+sns.heatmap(corr,
+        xticklabels=corr.columns,
+        yticklabels=corr.columns,
+        cmap="BuPu",
+        annot= True)
+
+# Plot scatterplot
+plt.figure(figsize=(10,6))
+sns.scatterplot(x='Family_Size',y='Spending_Score',data=customers_1)
+
+customers_1.describe()
+customers_1['Segmentation'].unique()
+
+one_hot_enc = OneHotEncoder()
+one_hot_enc.fit(y1)
+y1.shape
+
+y = one_hot_enc.transform(y1).toarray()
+y.shape
+y1[0]
+y[0]
+
+X_train,X_test,y_train,y_test=train_test_split(X,y,
+                                               test_size=0.33,
+                                               random_state=50)
+X_train[0]
+X_train.shape
+scaler_age = MinMaxScaler()
+scaler_age.fit(X_train[:,2].reshape(-1,1))
+
+X_train_scaled = np.copy(X_train)
+X_test_scaled = np.copy(X_test)
+
+X_train_scaled[:,2] = scaler_age.transform(X_train[:,2].reshape(-1,1)).reshape(-1)
+X_test_scaled[:,2] = scaler_age.transform(X_test[:,2].reshape(-1,1)).reshape(-1)
+
+# Creating the model
+model = Sequential([
+    Dense(units=8,activation='relu',input_shape=[8]),
+    Dense(units=16,activation='relu'),
+    Dense(units=4,activation='softmax')
 ])
 
 model.compile(optimizer='adam',
-                 loss='categorical_crossentropy',
+                 loss= 'categorical_crossentropy',
                  metrics=['accuracy'])
-from tensorflow.keras.callbacks import EarlyStopping
-early_stop = EarlyStopping(monitor='val_accuracy', patience=15)
-model.fit(x=X_train,y=y_train,
-          epochs=400,
-          validation_data=(X_test,y_test),
-          verbose=0, 
-          callbacks=[early_stop]
-          )
-```
-```python
+
+model.fit(x=X_train_scaled,y=y_train,
+             epochs= 2000,
+             batch_size= 256,
+             validation_data=(X_test_scaled,y_test),
+             )
+
 metrics = pd.DataFrame(model.history.history)
-metrics.iloc[metrics.shape[0]-1,:]4
+metrics.head()
+metrics[['loss','val_loss']].plot()
+predi = model.predict(X_test_scaled)
+predi
+x_test_predictions = np.argmax(model.predict(X_test_scaled), axis=1)
+x_test_predictions.shape
+y_test_truevalue = np.argmax(y_test,axis=1)
+y_test_truevalue.shape
+
+print(confusion_matrix(y_test_truevalue,x_test_predictions))
+
+print(classification_report(y_test_truevalue,x_test_predictions))
+
+# Saving the Model
+model.save('customer_classification_model.h5')
+
+# Saving the data ,PICKLE:  Stores as binary file and then converts
+with open('customer_data.pickle', 'wb') as fh:
+   pickle.dump([X_train_scaled,y_train,X_test_scaled,y_test,customers_1,customer_df_cleaned,scaler_age,enc,one_hot_enc,le], fh)
+
+# Loading the Model
+model = load_model('customer_classification_model.h5')
+
+# Loading the data
+with open('customer_data.pickle', 'rb') as fh:
+   [X_train_scaled,y_train,X_test_scaled,y_test,customers_1,customer_df_cleaned,scaler_age,enc,one_hot_enc,le]=pickle.load(fh)
+
+x_single_prediction = np.argmax(model.predict(X_test_scaled[1:2,:]), axis=1)
+
+print(x_single_prediction)
+
+print(le.inverse_transform(x_single_prediction))
+
 ```
-```python
-import matplotlib.pyplot as plt
-plt.figure(figsize=(15, 5))
-plt.subplot(1,2,1)
-plt.plot(metrics[['accuracy','val_accuracy']])
-plt.legend(["Training Accuracy","Validation Accuracy"])
-plt.title("Accuracy vs Test Accuracy")
-plt.subplot(1,2,2)
-plt.plot(metrics[['loss','val_loss']])
-plt.legend(["Training Loss","Validation Loss"])
-plt.title("Loss vs Test Loss")
-plt.show()
-```
-```python
-import numpy as np
-from sklearn.metrics import classification_report,confusion_matrix
-predictions=np.argmax(model.predict(X_test),axis=1)
-y_test=np.argmax(y_test, axis=1)
-print(classification_report(y_test,predictions))
-print(confusion_matrix(y_test,predictions))
-import seaborn as sn
-sn.heatmap(confusion_matrix(y_test,predictions))
-plt.show()
-```
 
-## Dataset Information
+## Dataset Information:
 
-![image](https://github.com/Harishspice/nn-classification/assets/117935868/831a0fb2-ec16-4a35-8d26-848ee5c0b326)
+![image](https://github.com/Rithigasri/DL_Exp02/assets/93427256/59ce1619-686c-4ae9-835f-9c77bdb146ed)
 
+## OUTPUT:
+### Training Loss, Validation Loss Vs Iteration Plot:
 
-## OUTPUT
-### Training Loss, Validation Loss Vs Iteration Plot
-![image](https://github.com/Harishspice/nn-classification/assets/117935868/05e078dd-5b6b-4992-8ddb-234df6c50de0)
-![image](https://github.com/Harishspice/nn-classification/assets/117935868/b43f36f3-59a7-455b-9f30-9285f7144325)
+![image](https://github.com/Rithigasri/DL_Exp02/assets/93427256/714e5816-8daf-49df-8ee1-bff332a8b6b6)
 
+### Classification Report:
 
-### Classification Report
+![image](https://github.com/Rithigasri/DL_Exp02/assets/93427256/6bfd3d31-f93b-42d9-83e4-a8ec21f6a983)
 
-![image](https://github.com/Harishspice/nn-classification/assets/117935868/bbcd250b-241b-4405-81b1-b332224badb7)
+### Confusion Matrix:
 
-### Confusion Matrix
+![image](https://github.com/Rithigasri/DL_Exp02/assets/93427256/419517ce-f97d-4f3e-af4a-977ccb0d24d4)
 
-![image](https://github.com/Harishspice/nn-classification/assets/117935868/c48d3ffa-9c27-4ff8-a989-2c4e077019cf)
+### New Sample Data Prediction:
 
-
-### New Sample Data Prediction
-
-![image](https://github.com/Harishspice/nn-classification/assets/117935868/02d7ae97-54f5-47ee-9232-8d6ae5ee9475)
+![image](https://github.com/Rithigasri/DL_Exp02/assets/93427256/11617352-b34c-4762-b686-39798d90c82d)
 
 ## RESULT
 Hence we have constructed a Neural Network model for Multiclass Classification.
